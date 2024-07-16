@@ -92,7 +92,7 @@ func (ops *OperatorsInfoServiceInMemory) startServiceInGoroutine(ctx context.Con
 			ops.logger.Error("Fatal error opening websocket subscription for new socket registrations", "err", err, "service", "OperatorPubkeysServiceInMemory")
 			panic(err)
 		}
-		ops.queryPastRegisteredOperatorEventsAndFillDb(ctx)
+		//ops.queryPastRegisteredOperatorEventsAndFillDb(ctx)
 		// The constructor can return after we have backfilled the db by querying the events of operators that have registered with the blsApkRegistry
 		// before the block at which we started the ws subscription above
 		wg.Done()
