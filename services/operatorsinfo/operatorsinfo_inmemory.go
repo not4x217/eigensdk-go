@@ -2,6 +2,7 @@ package operatorsinfo
 
 import (
 	"context"
+	"math/big"
 	"sync"
 
 	"github.com/Layr-Labs/eigensdk-go/chainio/clients/avsregistry"
@@ -56,6 +57,8 @@ func NewOperatorsInfoServiceInMemory(
 	avsRegistrySubscriber avsregistry.AvsRegistrySubscriber,
 	avsRegistryReader avsregistry.AvsRegistryReader,
 	logger logging.Logger,
+	queryOperators bool,
+	queryOperatorStartBlock *big.Int,
 ) *OperatorsInfoServiceInMemory {
 	queryC := make(chan query)
 	pkcs := &OperatorsInfoServiceInMemory{
@@ -71,12 +74,18 @@ func NewOperatorsInfoServiceInMemory(
 	// which requires querying the past events of the pubkey registration contract
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	pkcs.startServiceInGoroutine(ctx, queryC, &wg)
+	pkcs.startServiceInGoroutine(ctx, queryC, &wg, queryOperators, queryOperatorStartBlock)
 	wg.Wait()
 	return pkcs
 }
 
-func (ops *OperatorsInfoServiceInMemory) startServiceInGoroutine(ctx context.Context, queryC <-chan query, wg *sync.WaitGroup) {
+func (ops *OperatorsInfoServiceInMemory) startServiceInGoroutine(
+	ctx context.Context,
+	queryC <-chan query,
+	wg *sync.WaitGroup,
+	queryOperators bool,
+	queryOperatorStartBlock *big.Int,
+) {
 	go func() {
 
 		// TODO(samlaf): we should probably save the service in the logger itself and add it automatically to all logs
@@ -92,7 +101,9 @@ func (ops *OperatorsInfoServiceInMemory) startServiceInGoroutine(ctx context.Con
 			ops.logger.Error("Fatal error opening websocket subscription for new socket registrations", "err", err, "service", "OperatorPubkeysServiceInMemory")
 			panic(err)
 		}
-		ops.queryPastRegisteredOperatorEventsAndFillDb(ctx)
+		if queryOperators {
+			ops.queryPastRegisteredOperatorEventsAndFillDb(ctx, queryOperatorStartBlock)
+		}
 		// The constructor can return after we have backfilled the db by querying the events of operators that have registered with the blsApkRegistry
 		// before the block at which we started the ws subscription above
 		wg.Done()
@@ -151,17 +162,17 @@ func (ops *OperatorsInfoServiceInMemory) startServiceInGoroutine(ctx context.Con
 	}()
 }
 
-func (ops *OperatorsInfoServiceInMemory) queryPastRegisteredOperatorEventsAndFillDb(ctx context.Context) {
+func (ops *OperatorsInfoServiceInMemory) queryPastRegisteredOperatorEventsAndFillDb(ctx context.Context, startBlock *big.Int) {
 	// Querying with nil startBlock and stopBlock will return all events. It doesn't matter if we query some events that we will receive again in the websocket,
 	// since we will just overwrite the pubkey dict with the same values.
-	alreadyRegisteredOperatorAddrs, alreadyRegisteredOperatorPubkeys, err := ops.avsRegistryReader.QueryExistingRegisteredOperatorPubKeys(ctx, nil, nil)
+	alreadyRegisteredOperatorAddrs, alreadyRegisteredOperatorPubkeys, err := ops.avsRegistryReader.QueryExistingRegisteredOperatorPubKeys(ctx, startBlock, nil)
 	if err != nil {
 		ops.logger.Error("Fatal error querying existing registered operators", "err", err, "service", "OperatorPubkeysServiceInMemory")
 		panic(err)
 	}
 	ops.logger.Debug("List of queried operator registration events in blsApkRegistry", "alreadyRegisteredOperatorAddr", alreadyRegisteredOperatorAddrs, "service", "OperatorPubkeysServiceInMemory")
 
-	socketsMap, err := ops.avsRegistryReader.QueryExistingRegisteredOperatorSockets(ctx, nil, nil)
+	socketsMap, err := ops.avsRegistryReader.QueryExistingRegisteredOperatorSockets(ctx, startBlock, nil)
 	if err != nil {
 		ops.logger.Error("Fatal error querying existing registered operator sockets", "err", err, "service", "OperatorPubkeysServiceInMemory")
 		panic(err)

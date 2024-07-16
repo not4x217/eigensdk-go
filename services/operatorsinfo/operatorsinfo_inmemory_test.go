@@ -129,7 +129,7 @@ func TestGetOperatorInfo(t *testing.T) {
 				tt.mocksInitializationFunc(mockAvsRegistrySubscriber, mockAvsReader, mockSubscription)
 			}
 			// Create a new instance of the operatorpubkeys service
-			service := NewOperatorsInfoServiceInMemory(context.Background(), mockAvsRegistrySubscriber, mockAvsReader, logger)
+			service := NewOperatorsInfoServiceInMemory(context.Background(), mockAvsRegistrySubscriber, mockAvsReader, logger, true, nil)
 			time.Sleep(2 * time.Second) // need to give it time to process the subscription events.. not sure if there's a better way to do this.
 
 			// Call the GetOperatorPubkeys method with the test operator address
